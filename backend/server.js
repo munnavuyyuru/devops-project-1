@@ -84,11 +84,14 @@ app.delete('/api/todos/:id', async (req, res) => {
   }
 });
 
+
 const PORT = process.env.PORT || 3000;
+const HOST = '0.0.0.0'; // IMPORTANT for EC2
 
 // Graceful shutdown
-const server = app.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+ // console.log(`Backend running on http://${HOST}:${PORT}`);
+   console.log(`🚀 Backend running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
 });
 

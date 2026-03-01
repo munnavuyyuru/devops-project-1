@@ -103,102 +103,97 @@
         <ul id="todoList" class="todo-list"></ul>
     </div>
 
-    <script>
-        const API_URL = 'http://localhost:3000/api';
+<script>
+    const API_URL = 'http://localhost:3000/api';
 
-        // Check backend health
-        async function checkHealth() {
-            try {
-                const response = await fetch('http://localhost:3000/health');
-                const data = await response.json();
-                const status = document.getElementById('status');
-                if (data.status === 'healthy') {
-                    status.className = 'status connected';
-                    status.textContent = ' Connected to Backend & Database';
-                } else {
-                    status.className = 'status disconnected';
-                    status.textContent = ' Backend unhealthy';
-                }
-            } catch (err) {
-                const status = document.getElementById('status');
+    // Check backend health
+    async function checkHealth() {
+        try {
+            const response = await fetch('http://localhost:3000/health');
+            const data = await response.json();
+            const status = document.getElementById('status');
+            if (data.status === 'healthy') {
+                status.className = 'status connected';
+                status.textContent = '✅ Connected to Backend & Database';
+            } else {
                 status.className = 'status disconnected';
-                status.textContent = 'Cannot connect to Backend';
+                status.textContent = '❌ Backend unhealthy';
             }
+        } catch (err) {
+            const status = document.getElementById('status');
+            status.className = 'status disconnected';
+            status.textContent = '❌ Cannot connect to Backend';
         }
+    }
 
-        // Load todos
-        async function loadTodos() {
-            try {
-                const response = await fetch(`${API_URL}/todos`);
-                const todos = await response.json();
-                const todoList = document.getElementById('todoList');
-                todoList.innerHTML = todos.map(todo => `
-                    <li class="todo-item ${todo.completed ? 'completed' : ''}">
-                        <span onclick="toggleTodo(${todo.id}, ${!todo.completed})">
-                            ${todo.completed ? '✅' : '⬜'} ${todo.title}
-                        </span>
-                        <button class="delete-btn" onclick="deleteTodo(${todo.id})">Delete</button>
-                    </li>
-                `).join('');
-            } catch (err) {
-                console.error('Error loading todos:', err);
-            }
+    async function loadTodos() {
+        try {
+            const response = await fetch(`${API_URL}/todos`);
+            const todos = await response.json();
+            const todoList = document.getElementById('todoList');
+            todoList.innerHTML = todos.map(todo => `
+                <li class="todo-item ${todo.completed ? 'completed' : ''}">
+                    <span onclick="toggleTodo(${todo.id}, ${!todo.completed})">
+                        ${todo.completed ? '✅' : '⬜'} ${todo.title}
+                    </span>
+                    <button class="delete-btn" onclick="deleteTodo(${todo.id})">Delete</button>
+                </li>
+            `).join('');
+        } catch (err) {
+            console.error('Error loading todos:', err);
         }
+    }
 
-        // Add todo
-        async function addTodo() {
-            const input = document.getElementById('todoInput');
-            const title = input.value.trim();
-            if (!title) return;
+    async function addTodo() {
+        const input = document.getElementById('todoInput');
+        const title = input.value.trim();
+        if (!title) return;
 
-            try {
-                await fetch(`${API_URL}/todos`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title })
-                });
-                input.value = '';
-                loadTodos();
-            } catch (err) {
-                alert('Error adding todo');
-            }
+        try {
+            await fetch(`${API_URL}/todos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title })
+            });
+            input.value = '';
+            loadTodos();
+        } catch (err) {
+            alert('Error adding todo');
         }
+    }
 
-        // Toggle todo
-        async function toggleTodo(id, completed) {
-            try {
-                await fetch(`${API_URL}/todos/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ completed })
-                });
-                loadTodos();
-            } catch (err) {
-                alert('Error updating todo');
-            }
+    async function toggleTodo(id, completed) {
+        try {
+            await fetch(`${API_URL}/todos/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ completed })
+            });
+            loadTodos();
+        } catch (err) {
+            alert('Error updating todo');
         }
+    }
 
-        // Delete todo
-        async function deleteTodo(id) {
-            try {
-                await fetch(`${API_URL}/todos/${id}`, {
-                    method: 'DELETE'
-                });
-                loadTodos();
-            } catch (err) {
-                alert('Error deleting todo');
-            }
+    async function deleteTodo(id) {
+        try {
+            await fetch(`${API_URL}/todos/${id}`, {
+                method: 'DELETE'
+            });
+            loadTodos();
+        } catch (err) {
+            alert('Error deleting todo');
         }
+    }
 
-        // Enter key support
-        document.getElementById('todoInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addTodo();
-        });
+    document.getElementById('todoInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addTodo();
+    });
 
-        // Initialize
-        checkHealth();
-        loadTodos();
-        setInterval(checkHealth, 10000); // Check every 10 seconds
-    </script>
+    checkHealth();
+    loadTodos();
+    setInterval(checkHealth, 10000); //check for every 10seconds
+</script>
+
 </body>
 </html>

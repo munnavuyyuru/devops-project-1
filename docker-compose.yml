@@ -1,5 +1,11 @@
 version: '3.8'
 
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+
 services:
   # Database
   database:
@@ -13,7 +19,10 @@ services:
     environment:
       POSTGRES_DB: todoapp
       POSTGRES_USER: todouser
-      POSTGRES_PASSWORD: todopass123
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    
+    secrets:
+      - db_password
 
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -54,19 +63,28 @@ services:
       - DB_PORT=5432
       - DB_NAME=todoapp
       - DB_USER=todouser
-      - DB_PASSWORD=todopass123
+    
+    secrets:
+      - db_password
+      - jwt_secret
 
     depends_on:
       database:
         condition: service_healthy
 
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/health', r => { process.exit(r.statusCode === 200 ? 0 : 1) })"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-  
+    
+    logging:
+     driver: "json-file"
+     options:
+       max-size: "10m"
+       max-file: "3"
+    
     deploy:
       resources:
         limits:
@@ -97,7 +115,13 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
- 
+  
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
     deploy:
       resources:
         limits:

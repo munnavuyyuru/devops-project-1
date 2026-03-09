@@ -13,7 +13,7 @@ RUN npm ci --only=production
 
 FROM node:18-alpine AS production
 
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init curl
 
 RUN addgroup -g 1001 appgroup && \
     adduser -u 1001 -G appgroup -s /bin/sh -D appuser
@@ -24,13 +24,15 @@ COPY --from=dependencies --chown=appuser:appgroup /app/node_modules ./node_modul
 
 COPY --chown=appuser:appgroup . .
 
-USER appuser
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+   CMD curl -f http://localhost:3000/health || exit 1
 
-ENTRYPOINT ["dumb-init","--"]
+
+ENTRYPOINT ["dumb-init","--","/entrypoint.sh"]
 
 CMD ["node","server.js"]

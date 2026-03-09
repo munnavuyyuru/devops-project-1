@@ -65,7 +65,7 @@ docker compose ps
 7. ✅ Secrets management ready
 
 ## 📦 Production Deployment
-See [DEPLOYMENT.md]() for AWS deployment instructions.
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for AWS deployment instructions.
 
 
 ## 🔧 Troubleshooting

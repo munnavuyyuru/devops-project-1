@@ -1,0 +1,5 @@
+# Trivy Ignore File
+# Add CVE IDs here that you've assessed and accepted
+
+# Example:
+# CVE-2023-12345  # Accepted: Only affects Windows, we use Linux

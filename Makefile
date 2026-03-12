@@ -1,4 +1,4 @@
-.PHONY: build up down restart logs ps clean health
+.PHONY: build up down restart logs ps clean health scan
 
 build: ## build docker containers
 	docker compose build
@@ -24,4 +24,12 @@ clean: ##  Remove all containers, volumes, and images
 
 health: ## show health status
 	@docker compose ps --format "table {{.Name}}\t{{.Status}}"
+
+
+scan: ## Run security scan on all images
+	@./scripts/Trivy-scan.sh
+
+prod-check: build scan ## Build and scan before deploying
+	@echo "Production checks passed!"
+
 

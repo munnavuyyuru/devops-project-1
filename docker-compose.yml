@@ -46,6 +46,11 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d:ro
 
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U todouser -d todoapp"]
       interval: 10s
@@ -95,6 +100,11 @@ services:
       database:
         condition: service_healthy
 
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/secrets
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -133,6 +143,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+      - /var/cache/nginx  
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1/health"]

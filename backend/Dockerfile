@@ -13,19 +13,23 @@ RUN npm ci --only=production
 
 FROM node:18-alpine AS production
 
-RUN apk add --no-cache dumb-init curl
+RUN apk add --no-cache dumb-init curl su-exec
 
 RUN addgroup -g 1001 appgroup && \
     adduser -u 1001 -G appgroup -s /bin/sh -D appuser
+
+RUN mkdir -p /app/tmp && chown 1001:1001 /app/tmp
 
 WORKDIR /app
 
 COPY --from=dependencies --chown=appuser:appgroup /app/node_modules ./node_modules
 
-COPY --chown=appuser:appgroup . .
+COPY . .
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+ENV TMPDIR=/app/tmp
 
 EXPOSE 3000
 
@@ -36,3 +40,4 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 \
 ENTRYPOINT ["dumb-init","--","/entrypoint.sh"]
 
 CMD ["node","server.js"]
+

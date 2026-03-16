@@ -1,12 +1,13 @@
 #!/bin/sh
 set -e
 
-mkdir -p /app/secrets
+#chmod 644 /run/secrets/db_password 2>/dev/null || true
+#chmod 644 /run/secrets/jwt_secret 2>/dev/null || true
 
-if [ -d "/run/secrets" ]; then
-  cp /run/secrets/* /app/secrets/ 2>/dev/null || true
-fi
+#Load secrets into environment safely
+export DB_PASSWORD=$(cat /run/secrets/db_password)
+export JWT_SECRET=$(cat /run/secrets/jwt_secret)
 
-chown -R appuser:appgroup /app/secrets
+#exec su-exec appuser "$@"
 
-exec su appuser -c "$*"
+exec "$@"

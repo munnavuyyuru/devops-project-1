@@ -9,32 +9,29 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-function loadSecret(secretName) {
-  const prodPath = path.join('/app/secrets', secretName);
-  const devPath = path.join(__dirname, '..', 'secrets', `${secretName}.txt`);
+//const DB_PASSWORD = fs.readFileSync('/run/secrets/db_password', 'utf8').trim();
+//const JWT_SECRET = fs.readFileSync('/run/secrets/jwt_secret', 'utf8').trim();
 
-  try {
-    // Try production secret
-    if (fs.existsSync(prodPath)) {
-      return fs.readFileSync(prodPath, 'utf8').trim();
-    }
-
-    // Try development secret
-    if (fs.existsSync(devPath)) {
-      return fs.readFileSync(devPath, 'utf8').trim();
-    }
-
-    throw new Error(`Secret ${secretName} not found in ${prodPath} or ${devPath}`);
-
-  } catch (err) {
-    console.error(`Cannot load secret ${secretName}: ${err.message}`);
-    process.exit(1);
+function loadSecret(secretName, envVar) {
+  if (process.env[envVar]) {
+    return process.env[envVar].trim();
   }
+
+  const prodPath = path.join('/run/secrets', secretName);
+  if (fs.existsSync(prodPath)) {
+    return fs.readFileSync(prodPath, 'utf8').trim();
+  }
+
+  const devPath = path.join(__dirname, '..', 'secrets', `${secretName}.txt`);
+  if (fs.existsSync(devPath)) {
+    return fs.readFileSync(devPath, 'utf8').trim();
+  }
+
+  throw new Error(`Secret ${secretName} not found in env, ${prodPath}, or ${devPath}`);
 }
 
-// Load secrets
-const DB_PASSWORD = loadSecret('db_password');
-const JWT_SECRET = loadSecret('jwt_secret');
+const DB_PASSWORD = loadSecret('db_password', 'DB_PASSWORD');
+const JWT_SECRET = loadSecret('jwt_secret', 'JWT_SECRET');
 
 console.log('Secrets loaded successfully');
 

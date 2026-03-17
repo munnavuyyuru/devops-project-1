@@ -12,26 +12,26 @@ app.use(express.json());
 //const DB_PASSWORD = fs.readFileSync('/run/secrets/db_password', 'utf8').trim();
 //const JWT_SECRET = fs.readFileSync('/run/secrets/jwt_secret', 'utf8').trim();
 
-function loadSecret(secretName, envVar) {
-  if (process.env[envVar]) {
-    return process.env[envVar].trim();
+function loadSecret(secretName) {
+  try {
+    const productionPath = `/run/secrets/${secretName}`;
+    const devPath = path.join(__dirname, '..', 'secrets', `${secretName}.txt`);
+    
+    if (fs.existsSync(productionPath)) {
+      return fs.readFileSync(productionPath, 'utf8').trim();
+    } else if (fs.existsSync(devPath)) {
+      return fs.readFileSync(devPath, 'utf8').trim();
+    } else {
+      throw new Error(`Secret ${secretName} not found`);
+    }
+  } catch (err) {
+    console.error(`FATAL: Cannot load secret ${secretName}:`, err.message);
+    process.exit(1);
   }
-
-  const prodPath = path.join('/run/secrets', secretName);
-  if (fs.existsSync(prodPath)) {
-    return fs.readFileSync(prodPath, 'utf8').trim();
-  }
-
-  const devPath = path.join(__dirname, '..', 'secrets', `${secretName}.txt`);
-  if (fs.existsSync(devPath)) {
-    return fs.readFileSync(devPath, 'utf8').trim();
-  }
-
-  throw new Error(`Secret ${secretName} not found in env, ${prodPath}, or ${devPath}`);
 }
 
-const DB_PASSWORD = loadSecret('db_password', 'DB_PASSWORD');
-const JWT_SECRET = loadSecret('jwt_secret', 'JWT_SECRET');
+const DB_PASSWORD = loadSecret('db_password');
+const JWT_SECRET = loadSecret('jwt_secret');
 
 console.log('Secrets loaded successfully');
 
@@ -44,6 +44,17 @@ const pool = new Pool({
   password: DB_PASSWORD
 });
 
+// Track active connections
+let activeConnections = 0;
+
+app.use((req, res, next) => {
+  activeConnections++;
+  res.on('finish', () => {
+    activeConnections--;
+  });
+  next();
+});
+
 // Health check endpoint (CRITICAL for production)
 app.get('/health', async (req, res) => {
   try {
@@ -52,7 +63,8 @@ app.get('/health', async (req, res) => {
       status: 'healthy', 
       database: 'connected',
       timestamp: new Date().toISOString(),
-      secrets: 'loaded'
+      secrets: 'loaded',
+      activeConnections: activeConnections	    
     });
   } catch (err) {
     res.status(503).json({ 
@@ -117,31 +129,74 @@ app.delete('/api/todos/:id', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0'; // IMPORTANT for EC2
 
-// Graceful shutdown
+
 const server = app.listen(PORT, HOST, () => {
- // console.log(`Backend running on http://${HOST}:${PORT}`);
-   console.log(`🚀 Backend running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`?? Backend running on http://${HOST}:${PORT}`);
+  console.log(`?? Health check: http://localhost:${PORT}/health`);
 });
 
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, closing server gracefully...');
-  server.close(() => {
-    console.log('HTTP server closed');
-    pool.end(() => {
-      console.log('Database pool closed');
-      process.exit(0);
-    });
+// Graceful shutdown
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal) {
+  if (isShuttingDown) {
+    console.log('Shutdown already in progress...');
+    return;
+  }
+  
+  isShuttingDown = true;
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+  console.log(`Active connections: ${activeConnections}`);
+  
+  //Stop accepting new requests
+  server.close((err) => {
+    if (err) {
+      console.error('Error closing HTTP server:', err);
+    } else {
+      console.log('HTTP server closed ');
+    }
   });
+  
+  // Wait for active connections to finish (with timeout)
+  const shutdownTimeout = 25000; // 25 seconds 
+  const checkInterval = 100;
+  let elapsed = 0;
+  
+  while (activeConnections > 0 && elapsed < shutdownTimeout) {
+    console.log(` Waiting for ${activeConnections} active connections to finish...`);
+    await new Promise(resolve => setTimeout(resolve, checkInterval));
+    elapsed += checkInterval;
+  }
+  
+  if (activeConnections > 0) {
+    console.log(` Forcing shutdown with ${activeConnections} active connections remaining`);
+  } else {
+    console.log(' All connections closed cleanly');
+  }
+  
+  // Step 3: Close database pool
+  try {
+    await pool.end();
+    console.log(' Database pool closed');
+  } catch (err) {
+    console.error(' Error closing database pool:', err);
+  }
+  
+  console.log(' Shutdown complete. Goodbye!');
+  process.exit(0);
+}
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught errors gracefully
+process.on('uncaughtException', (err) => {
+  console.error(' Uncaught Exception:', err);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, closing server gracefully...');
-  server.close(() => {
-    console.log('HTTP server closed');
-    pool.end(() => {
-      console.log('Database pool closed');
-      process.exit(0);
-    });
-  });
+process.on('unhandledRejection', (reason, promise) => {
+  console.error(' Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('UNHANDLED_REJECTION');
 });

@@ -12,3 +12,7 @@ secrets/
 
 npm-debug.log
 yarn-error.log
+backups/*.sql*
+backups/daily/*
+backups/weekly/*
+backups/monthly/*

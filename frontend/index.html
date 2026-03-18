@@ -107,24 +107,72 @@
     const API_URL = 'http://3.110.242.240:3000/api';
 
     // Check backend health
-    async function checkHealth() {
-        try {
-            const response = await fetch('http://3.110.242.240:3000/health');
-            const data = await response.json();
-            const status = document.getElementById('status');
-            if (data.status === 'healthy') {
-                status.className = 'status connected';
-                status.textContent = '✅ Connected to Backend & Database';
-            } else {
-                status.className = 'status disconnected';
-                status.textContent = '❌ Backend unhealthy';
+//    async function checkHealth() {
+//        try {
+//            const response = await fetch('http://3.110.242.240:3000/health');
+//            const data = await response.json();
+//            const status = document.getElementById('status');
+//            if (data.status === 'healthy') {
+//                status.className = 'status connected';
+//                status.textContent = '✅ Connected to Backend & Database';
+//            } else {
+//                status.className = 'status disconnected';
+//                status.textContent = '❌ Backend unhealthy';
+//            }
+//        } catch (err) {
+//            const status = document.getElementById('status');
+//            status.className = 'status disconnected';
+//            status.textContent = '❌ Cannot connect to Backend';
+//        }
+//    }
+    
+     async function checkHealth() {
+            try {
+                const response = await fetch('http://3.110.242.240:3000/health');
+                const data = await response.json();
+                const status = document.getElementById('status');
+                
+                if (data.status === 'healthy') {
+                    status.className = 'status healthy';
+                    status.innerHTML = `
+                        <div class="status-header">✅ System Healthy</div>
+                        <div class="status-details">
+                            <div class="status-detail">🗄️ Database: ${data.checks.database?.responseTime || 'N/A'}</div>
+                            <div class="status-detail">💾 Memory: ${data.checks.memory?.usage?.heapUsed || 'N/A'} MB</div>
+                            <div class="status-detail">⏱️ Uptime: ${Math.floor(data.uptime / 60)} minutes</div>
+                            <div class="status-detail">🔌 Active: ${data.checks.connections?.active || 0} connections</div>
+                        </div>
+                    `;
+                } else if (data.status === 'degraded') {
+                    status.className = 'status degraded';
+                    status.innerHTML = `
+                        <div class="status-header">⚠️ System Degraded</div>
+                        <div class="status-details">
+                            <div class="status-detail">Database: ${data.checks.database?.status || 'unknown'}</div>
+                            <div class="status-detail">Memory: ${data.checks.memory?.status || 'unknown'}</div>
+                            ${data.checks.database?.warning ? `<div class="status-detail">⚠️ ${data.checks.database.warning}</div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    status.className = 'status unhealthy';
+                    status.innerHTML = `
+                        <div class="status-header">❌ System Unhealthy</div>
+                        <div class="status-details">
+                            <div class="status-detail">${data.checks.database?.error || 'Backend unavailable'}</div>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                const status = document.getElementById('status');
+                status.className = 'status unhealthy';
+                status.innerHTML = `
+                    <div class="status-header">❌ Cannot Connect to Backend</div>
+                    <div class="status-details">
+                        <div class="status-detail">Error: ${err.message}</div>
+                    </div>
+                `;
             }
-        } catch (err) {
-            const status = document.getElementById('status');
-            status.className = 'status disconnected';
-            status.textContent = '❌ Cannot connect to Backend';
         }
-    }
 
     async function loadTodos() {
         try {
@@ -193,6 +241,8 @@
     checkHealth();
     loadTodos();
     setInterval(checkHealth, 10000); //check for every 10seconds
+    setInterval(loadTodos, 30000);    // Reload todos every 30 seconds
+    
 </script>
 
 </body>

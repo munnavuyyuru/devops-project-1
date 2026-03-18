@@ -55,24 +55,128 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint (CRITICAL for production)
+// Health check endpoint.
+
 app.get('/health', async (req, res) => {
+  const health = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV,
+    checks: {}
+  };
+
+  let overallStatus = 'healthy';
+
+  // Database connectivity
   try {
+    const start = Date.now();
     await pool.query('SELECT 1');
-    res.json({ 
-      status: 'healthy', 
-      database: 'connected',
-      timestamp: new Date().toISOString(),
-      secrets: 'loaded',
-      activeConnections: activeConnections	    
+    const responseTime = Date.now() - start;
+    
+    health.checks.database = {
+      status: 'healthy',
+      responseTime: `${responseTime}ms`,
+      message: 'Database connection successful'
+    };
+
+    // Warn if database is slow
+    if (responseTime > 1000) {
+      health.checks.database.status = 'degraded';
+      health.checks.database.warning = 'Slow response time';
+      overallStatus = 'degraded';
+    }
+  } catch (err) {
+    health.checks.database = {
+      status: 'unhealthy',
+      error: err.message
+    };
+    overallStatus = 'unhealthy';
+  }
+
+  // Database pool health
+  const poolStats = {
+    totalConnections: pool.totalCount,
+    idleConnections: pool.idleCount,
+    waitingRequests: pool.waitingCount
+  };
+
+  health.checks.databasePool = {
+    status: 'healthy',
+    ...poolStats
+  };
+
+  // Warn if pool is exhausted
+  if (pool.waitingCount > 0) {
+    health.checks.databasePool.status = 'degraded';
+    health.checks.databasePool.warning = 'Connection pool under pressure';
+    overallStatus = 'degraded';
+  }
+
+  // Memory usage
+  const memUsage = process.memoryUsage();
+  const memUsageMB = {
+    rss: Math.round(memUsage.rss / 1024 / 1024),
+    heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+    heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+    external: Math.round(memUsage.external / 1024 / 1024)
+  };
+
+  health.checks.memory = {
+    status: 'healthy',
+    usage: memUsageMB,
+    unit: 'MB'
+  };
+
+  // Warn if memory usage is high.
+  if (memUsageMB.heapUsed > 400) {
+    health.checks.memory.status = 'degraded';
+    health.checks.memory.warning = 'High memory usage';
+    overallStatus = 'degraded';
+  }
+
+  // Active connections
+  health.checks.connections = {
+    status: 'healthy',
+    active: activeConnections
+  };
+
+  // Secrets loaded
+  health.checks.secrets = {
+    status: 'healthy',
+    loaded: true
+  };
+
+  
+  health.status = overallStatus;
+
+  const statusCode = overallStatus === 'healthy' ? 200 : 
+                     overallStatus === 'degraded' ? 200 : 503;
+
+  res.status(statusCode).json(health);
+});
+
+// Readiness check
+app.get('/ready', async (req, res) => {
+  try {
+    
+    await pool.query('SELECT 1');
+    res.status(200).json({ 
+      ready: true,
+      timestamp: new Date().toISOString()
     });
   } catch (err) {
     res.status(503).json({ 
-      status: 'unhealthy', 
-      database: 'disconnected',
-      error: err.message 
+      ready: false,
+      reason: 'Database not ready',
+      error: err.message
     });
   }
+});
+
+
+app.get('/live', (req, res) => {
+  res.status(200).json({ alive: true });
 });
 
 // Get all todos

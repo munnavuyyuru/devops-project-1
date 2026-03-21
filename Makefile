@@ -1,4 +1,4 @@
-.PHONY: build up down restart logs ps clean health scan backup restore list-backups
+.PHONY: build up down restart logs ps clean health scan backup restore list-backups logs-all logs-backend logs-errors logs-follow grafana
 
 build: ## build docker containers
 	docker compose build
@@ -51,3 +51,21 @@ list-backups: ## List all backups
 	@echo ""
 	@echo "Monthly backups:"
 	@ls -lh backups/monthly/*.gz 2>/dev/null || echo "  No monthly backups"
+
+logs-all: ## View all container logs via Loki
+	@./scripts/logs.sh -n 100
+
+logs-backend: ## View backend logs
+	@./scripts/logs.sh -c backend -n 50
+
+logs-errors: ## View all error logs
+	@./scripts/logs.sh -l error -n 50
+
+logs-follow: ## Follow all logs in real-time
+	@./scripts/logs.sh -f
+
+grafana: ## Open Grafana dashboard
+	@echo "Opening Grafana..."
+	@echo "URL: http://localhost:3001"
+	@echo "Username: admin"
+	@echo "Password: admin"

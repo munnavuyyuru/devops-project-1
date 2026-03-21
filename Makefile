@@ -1,4 +1,4 @@
-.PHONY: build up down restart logs ps clean health scan backup restore list-backups logs-all logs-backend logs-errors logs-follow grafana
+.PHONY: build up down restart logs ps clean health scan backup restore list-backups logs-all logs-backend logs-errors logs-follow grafana monitor prometheus metrics load-test
 
 build: ## build docker containers
 	docker compose build
@@ -69,3 +69,23 @@ grafana: ## Open Grafana dashboard
 	@echo "URL: http://localhost:3001"
 	@echo "Username: admin"
 	@echo "Password: admin"
+
+monitor: ## Real-time metrics monitoring
+	@./scripts/monitor-metrics.sh
+
+prometheus: ## Open Prometheus UI
+	@echo "Opening Prometheus..."
+	@echo "URL: http://localhost:9090"
+
+metrics: ## View backend metrics
+	@curl -s http://localhost:3000/metrics
+
+load-test: ## Generate load for testing
+	@echo "Generating load (100 requests)..."
+	@for i in $$(seq 1 100); do \
+		curl -s http://localhost:3000/api/todos > /dev/null; \
+		echo -n "."; \
+		sleep 0.1; \
+	done
+	@echo ""
+	@echo "Load test complete!"

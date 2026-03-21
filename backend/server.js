@@ -4,6 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
+const client = require('prom-client');
 
 const app = express();
 app.use(cors());
@@ -35,6 +36,52 @@ const JWT_SECRET = loadSecret('jwt_secret');
 
 console.log('Secrets loaded successfully');
 
+
+// Create a registry for metrics
+const register = new client.Registry();
+client.collectDefaultMetrics({ register });
+
+// Custom metrics
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets: [0.001, 0.01, 0.1, 0.5, 1, 2, 5]
+});
+
+const httpRequestTotal = new client.Counter({
+  name: 'http_requests_total',
+  help: 'Total number of HTTP requests',
+  labelNames: ['method', 'route', 'status_code']
+});
+
+const dbQueryDuration = new client.Histogram({
+  name: 'db_query_duration_seconds',
+  help: 'Duration of database queries in seconds',
+  labelNames: ['query_type'],
+  buckets: [0.001, 0.01, 0.1, 0.5, 1, 2]
+});
+
+const activeConnectionsGauge = new client.Gauge({
+  name: 'active_connections',
+  help: 'Number of active HTTP connections'
+});
+
+const dbPoolGauge = new client.Gauge({
+  name: 'db_pool_connections',
+  help: 'Database connection pool status',
+  labelNames: ['state']
+});
+
+// Register custom metrics
+register.registerMetric(httpRequestDuration);
+register.registerMetric(httpRequestTotal);
+register.registerMetric(dbQueryDuration);
+register.registerMetric(activeConnectionsGauge);
+register.registerMetric(dbPoolGauge);
+
+let activeConnections = 0;
+
 // Database connection
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
@@ -44,15 +91,42 @@ const pool = new Pool({
   password: DB_PASSWORD
 });
 
-// Track active connections
-let activeConnections = 0;
-
+// Metrics middleware
 app.use((req, res, next) => {
+  const start = Date.now();
+  
   activeConnections++;
+  activeConnectionsGauge.set(activeConnections);
+  
   res.on('finish', () => {
+    const duration = (Date.now() - start) / 1000;
+    const route = req.route ? req.route.path : req.path;
+    
+    httpRequestDuration
+      .labels(req.method, route, res.statusCode)
+      .observe(duration);
+    
+    httpRequestTotal
+      .labels(req.method, route, res.statusCode)
+      .inc();
+    
     activeConnections--;
+    activeConnectionsGauge.set(activeConnections);
   });
+  
   next();
+});
+
+// Update DB pool metrics periodically
+setInterval(() => {
+  dbPoolGauge.labels('total').set(pool.totalCount);
+  dbPoolGauge.labels('idle').set(pool.idleCount);
+  dbPoolGauge.labels('waiting').set(pool.waitingCount);
+}, 5000);
+
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
 });
 
 // Health check endpoint.
@@ -181,22 +255,34 @@ app.get('/live', (req, res) => {
 
 // Get all todos
 app.get('/api/todos', async (req, res) => {
+  const start = Date.now(); 
+  
   try {
     const result = await pool.query('SELECT * FROM todos ORDER BY id DESC');
+    
+    const duration = (Date.now() - start) / 1000;
+    dbQueryDuration.labels('select').observe(duration);
+    
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+
 // Create todo
 app.post('/api/todos', async (req, res) => {
+  const start = Date.now();
   const { title } = req.body;
   try {
     const result = await pool.query(
       'INSERT INTO todos (title, completed) VALUES ($1, $2) RETURNING *',
       [title, false]
     );
+    
+    const duration = (Date.now() - start) / 1000;
+    dbQueryDuration.labels('insert').observe(duration);
+    
     res.status(201).json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -205,6 +291,7 @@ app.post('/api/todos', async (req, res) => {
 
 // Update todo
 app.put('/api/todos/:id', async (req, res) => {
+  const start = Date.now();
   const { id } = req.params;
   const { completed } = req.body;
   try {
@@ -212,6 +299,10 @@ app.put('/api/todos/:id', async (req, res) => {
       'UPDATE todos SET completed = $1 WHERE id = $2 RETURNING *',
       [completed, id]
     );
+    
+    const duration = (Date.now() - start) / 1000;
+    dbQueryDuration.labels('update').observe(duration);
+    
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -220,9 +311,14 @@ app.put('/api/todos/:id', async (req, res) => {
 
 // Delete todo
 app.delete('/api/todos/:id', async (req, res) => {
+  const start = Date.now();
   const { id } = req.params;
   try {
     await pool.query('DELETE FROM todos WHERE id = $1', [id]);
+    
+    const duration = (Date.now() - start) / 1000;
+    dbQueryDuration.labels('delete').observe(duration);
+    
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -235,8 +331,8 @@ const HOST = '0.0.0.0'; // IMPORTANT for EC2
 
 
 const server = app.listen(PORT, HOST, () => {
-  console.log(`?? Backend running on http://${HOST}:${PORT}`);
-  console.log(`?? Health check: http://localhost:${PORT}/health`);
+  console.log(`Backend running on http://${HOST}:${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
 });
 
 // Graceful shutdown

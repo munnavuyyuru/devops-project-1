@@ -64,6 +64,16 @@ docker compose ps
 6. ✅ Log rotation
 7. ✅ Secrets management ready
 
+
+## 💻 system overview
+
+<img width="1051" height="479" alt="image" src="https://github.com/user-attachments/assets/64002aab-3175-4427-9084-abd0c940d37a" />
+
+### Access Dashboards:
+
+- Grafana: **http://localhost:3001 (admin/admin)**
+- Prometheus: **http://localhost:9090**
+
 ## 📦 Production Deployment
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for AWS deployment instructions.
 
